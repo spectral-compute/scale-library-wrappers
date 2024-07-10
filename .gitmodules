@@ -1,0 +1,3 @@
+[submodule "xcmake"]
+	path = xcmake
+	url = https://github.com/spectral-compute/xcmake.git
