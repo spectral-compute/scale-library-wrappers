@@ -3,6 +3,9 @@
 
 #define MATHLIB_SPARSE_INCLUDED
 
+// Alien's helper_cuda.h looks for this.
+#define CUSPARSEAPI
+
 #ifdef __cplusplus
 // If we were to use rocsparse_float_complex, rocsparse_double_complex, we would get build problems 
 // with any library including both cusolver and cusparse, due to cuToRoc() being a direct conversion.

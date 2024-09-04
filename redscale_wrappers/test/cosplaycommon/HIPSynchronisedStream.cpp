@@ -4,14 +4,7 @@
 #include <atomic>
 #include <thread>
 
-namespace redscale
-{
-
-class Stream;
-
-} // namespace redscale
-
-typedef redscale::Stream CUstream_st;
+struct CUstream_st;
 typedef CUstream_st *cudaStream_t;
 
 typedef void (* cudaStreamCallback_t)(cudaStream_t, int, void *);

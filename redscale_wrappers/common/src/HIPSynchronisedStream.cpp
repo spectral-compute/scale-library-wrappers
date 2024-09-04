@@ -5,9 +5,15 @@
 #include <functional>
 #include <map>
 
+using namespace redscale;
+
+extern "C" int cudaGetDevice(int *);
+
 namespace redscale
 {
 
+cudaStream_t desugarStream(cudaStream_t stream);
+int getStreamDevice(cudaStream_t stream);
 void addShutdownFunction(std::function<void ()>);
 
 } // namespace redscale
@@ -16,11 +22,43 @@ namespace CudaRocmWrapper
 {
 
 void linkHipInterception();
+void getDevicePciId(int deviceId, int &domain, int &bus, int &device);
 
 } // namespace CudaRocmWrapper
 
 namespace
 {
+
+/**
+ * Get the HIP device corresponding to a given CUDA device.
+ */
+int getHipDeviceForCudaDevice(int cudaDevice)
+{
+    /* Figure out the PCI ID that we can use to identify the device in HIP. */
+    int domain = 0;
+    int bus = 0;
+    int device = 0;
+    CudaRocmWrapper::getDevicePciId(cudaDevice, domain, bus, device);
+
+    /* Search the HIP devices looking for a match. */
+    // Figure out how many HIP devices exist.
+    int numHipDevices = 0;
+    CudaRocmWrapper::HipException::test(hipGetDeviceCount(&numHipDevices), "Could not get number of HIP devices.");
+
+    // Iterate the devices, testing each PCI address.
+    for (int hipDevice = 0; hipDevice < numHipDevices; hipDevice++) {
+        hipDeviceProp_t p;
+        memset(&p, 0, sizeof(p));
+        CudaRocmWrapper::HipException::test(hipGetDeviceProperties(&p, hipDevice),
+                                            "Could not get properties for HIP device.");
+        if (p.pciDeviceID == device && p.pciBusID == bus && p.pciDomainID == domain) {
+            return hipDevice;
+        }
+    }
+
+    /* Could not find a corresponding device. */
+    throw CudaRocmWrapper::Exception("Could not find HIP device for CUDA device " + std::to_string(cudaDevice) + ".");
+}
 
 /**
  * A mapping between HIP stream and CUDA stream.
@@ -76,6 +114,7 @@ cudaStream_t CudaRocmWrapper::HIPSynchronisedStream::getCudaStream(hipStream_t h
 std::shared_ptr<CudaRocmWrapper::HIPSynchronisedStream>
 CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(cudaStream_t cudaStream)
 {
+    cudaStream = desugarStream(cudaStream);
     linkHipInterception();
 
     static char key = 0;
@@ -97,10 +136,31 @@ CudaRocmWrapper::HIPSynchronisedStream::~HIPSynchronisedStream()
     e = hipStreamDestroy(hipStream);
 }
 
-CudaRocmWrapper::HIPSynchronisedStream::HIPSynchronisedStream(cudaStream_t cudaStream) : cudaStream(cudaStream)
+CudaRocmWrapper::HIPSynchronisedStream::HIPSynchronisedStream(cudaStream_t cudaStream) :
+    cudaStream(desugarStream(cudaStream))
 {
+    /* Make sure we restore the HIP device selection to match the CUDA device selection when we're done. */
+    // Get the current CUDA device.
+    int currentCudaDevice = 0;
+    if (cudaGetDevice(&currentCudaDevice) != 0) {
+        throw Exception("Could not get current CUDA device.");
+    }
+
+    // Get the corresponding HIP device.
+    int currentHipDevice = getHipDeviceForCudaDevice(currentCudaDevice);
+
+    // An RAII object to restore it after we're done.
+    auto restoreHipDevice = std::shared_ptr<void>(nullptr, [=](void *) {
+        HipException::test(hipSetDevice(currentHipDevice), "Could not restore HIP device.");
+    });
+
+    /* Set the HIP device to the one we want to create the stream on. */
+    HipException::test(hipSetDevice(getHipDeviceForCudaDevice(redscale::getStreamDevice(this->cudaStream))),
+                       "Could not set HIP device.");
+
+    /* Add a new stream to the map. */
     HipException::test(hipStreamCreate(&hipStream), "Could not create HIP stream.");
-    getStreamMap().add(cudaStream, hipStream);
+    getStreamMap().add(this->cudaStream, hipStream);
 }
 
 hsa_signal_value_t *CudaRocmWrapper::HIPSynchronisedStream::enqueueStartOfHipItems()

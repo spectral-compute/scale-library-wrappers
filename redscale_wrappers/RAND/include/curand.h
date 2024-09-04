@@ -1,6 +1,9 @@
 #ifndef GPURAND_AUXILLARY_H
 #define GPURAND_AUXILLARY_H
 
+// Alien's helper_cuda.h looks for this.
+#define CURAND_H_
+
 #include "cuda.h"
 #ifdef __cplusplus
 #include <cstddef>

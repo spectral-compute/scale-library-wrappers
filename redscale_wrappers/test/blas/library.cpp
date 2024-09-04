@@ -1,9 +1,6 @@
 #include "gtest/gtest.h"
 #include "cublas_v2.h"
 
-// This test is specifically designed to have race conditions, so when it fails it is likely to
-// fail nondeterministically. Enjoy.
-
 TEST(BLAS, CreateDestroy) {
     cublasHandle_t handle;
     EXPECT_EQ(cublasCreate(&handle), CUBLAS_STATUS_SUCCESS);
@@ -15,7 +12,10 @@ TEST(BLAS, Version) {
     int version;
     EXPECT_EQ(cublasCreate(&handle), CUBLAS_STATUS_SUCCESS);
     EXPECT_EQ(cublasGetVersion(handle, &version), CUBLAS_STATUS_SUCCESS);
+
+#ifdef __REDSCALE__
     EXPECT_EQ(version, 42);
+#endif // __REDSCALE__
 }
 
 TEST(BLAS, LibraryPropertyNonsense) {
@@ -28,7 +28,9 @@ TEST(BLAS, LibraryPropertyNonsense) {
     EXPECT_EQ(cublasGetProperty(MINOR_VERSION, &minor), CUBLAS_STATUS_SUCCESS);
     EXPECT_EQ(cublasGetProperty(PATCH_LEVEL, &patch), CUBLAS_STATUS_SUCCESS);
 
+#ifdef __REDSCALE__
     EXPECT_EQ(major, 42);
     EXPECT_EQ(minor, 0);
     EXPECT_EQ(patch, 0);
+#endif // __REDSCALE__
 }

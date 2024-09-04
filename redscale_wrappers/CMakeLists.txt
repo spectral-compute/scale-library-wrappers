@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 include(../xcmake/scripts/Init.cmake)
 project(redscale_mathswrappers LANGUAGES C CXX
-        VERSION 1.0.0.0)
+        VERSION 1.0.2.0)
 include(XCMake)
 target_compile_options(ASSERTIONS_EFFECTS INTERFACE -UNDEBUG)
 
@@ -50,17 +50,23 @@ if (NOT TARGET redscale)
             fatal_error(FATAL_ERROR "Currently, only one GPU device is supported at once when building tests. Please "
                                     "set DeviceTargets accordingly.")
         endif()
-
-        # Don't rely on our internal GTest.
-        set(XCMAKE_SYSTEM_GTEST Off CACHE INTERNAL "" FORCE)
-
-        # Set up the target that gives the tests the correct options.
-        add_library(redscale_pseudo_test INTERFACE)
-        foreach(_target IN LISTS DeviceTargets)
-            target_compile_options(redscale_pseudo_test INTERFACE --cuda-gpu-arch=${_target})
-        endforeach()
     endif()
 endif()
+
+function (add_wrapper_gtest TARGET)
+    add_gtest_executable(${TARGET} ${ARGN})
+    if (TARGET redscale)
+        apply_scale_amd_options(${TARGET})
+    else()
+        target_compile_options(${TARGET} PRIVATE -x cuda "--cuda-path=${PSEUDO_INSTALL}")
+    endif()
+
+    foreach(_target IN LISTS DeviceTargets)
+        target_compile_options(${TARGET} PRIVATE --cuda-gpu-arch=${_target})
+    endforeach()
+    target_link_libraries(${TARGET} PRIVATE redscale)
+endfunction()
+
 
 # GCC libs explode in the presence of the scale-addrspace parser. PRobably need to fix that...
 set(XCMAKE_SCALE OFF)

@@ -1,6 +1,8 @@
 
 #define MATHLIBS_SOLVER_INCLUDED
 
+// Alien's helper_cuda.h looks for this.
+#define CUSOLVER_COMMON_H_
 
 #include "rocsparse/rocsparse-auxiliary.h"
 #include "rocsparse/rocsparse-functions.h"

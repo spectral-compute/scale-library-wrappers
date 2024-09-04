@@ -1,6 +1,7 @@
 include(GTest)
 
 find_sources(BLAS_TEST_SOURCES "${CMAKE_CURRENT_LIST_DIR}")
+list(APPEND BLAS_TEST_SOURCES "${CMAKE_CURRENT_LIST_DIR}/../main.cpp")
 set_source_files_properties(${BLAS_TEST_SOURCES} PROPERTIES LANGUAGE CXX)
 
 add_gtest_executable(cosplay_blas_gtest "${BLAS_TEST_SOURCES}")

@@ -1,6 +1,9 @@
 #ifndef GPUBLAS_APIS_H
 #define GPUBLAS_APIS_H
 
+// Alien's helper_cuda.h looks for this.
+#define CUBLAS_API_H_
+
 #include <cuComplex.h>
 #include "cublas/export.h"
 #include "blas_types.h"

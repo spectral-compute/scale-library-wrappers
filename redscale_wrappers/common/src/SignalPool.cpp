@@ -1,5 +1,6 @@
 #include "cosplay_impl/SignalPool.hpp"
 #include "cosplay_impl/Exception.hpp"
+#include "cosplay_impl/cuda_decl.hpp"
 #include <hip/hip_runtime_api.h>
 #include <dlfcn.h>
 #include <cassert>
@@ -16,10 +17,15 @@ CudaRocmWrapper::SignalPool::~SignalPool()
     signalRecyclingThread.join();
     assert(activeSignals.empty());
 
-    /* Destroy the stream. */
-    static auto hipFree = (hipError_t (*)(void *))dlsym(RTLD_NEXT, "hipFree");
-    for (hsa_signal_value_t *signal: signalPool) {
-        [[maybe_unused]] hipError_t e = hipFree(signal);
+    // If we're in global de-init, don't bother hipFree-ing anything.
+    // HIP might have already been de-initialised (in which case this
+    // would crash),
+    if (!redscale::isLibraryShutdownInProgress()) {
+        /* Destroy the signal. */
+        static auto hipFree = (hipError_t (*)(void *)) dlsym(RTLD_NEXT, "hipFree");
+        for (hsa_signal_value_t *signal: signalPool) {
+            [[maybe_unused]] hipError_t e = hipFree(signal);
+        }
     }
 }
 

@@ -2,15 +2,7 @@
 
 #include "SignalPool.hpp"
 
-// We have small declarations for RedSCALE and HIP: Just enough for the declarations in this header.
-namespace redscale
-{
-
-class Stream;
-
-} // namespace redscale
-
-typedef redscale::Stream CUstream_st;
+struct CUstream_st;
 typedef CUstream_st *cudaStream_t;
 
 struct ihipStream_t;

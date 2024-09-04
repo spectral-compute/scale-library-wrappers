@@ -139,6 +139,7 @@ typedef rocrand_state_sobol32 curandStateSobol32_t;
 typedef rocrand_state_mtgp32 curandStateMtgp32_t;
 typedef rocrand_state_xorwow curandStateXORWOW_t;
 typedef curandStateXORWOW_t curandState_t;
+typedef curandState_t curandState;
 
 // The manual says so. Kinda weird that this even exists :D
 typedef unsigned long long* curandDirectionVectors64_t;

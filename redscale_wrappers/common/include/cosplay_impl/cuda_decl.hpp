@@ -6,15 +6,8 @@
 
 /* Declarations of the RedSCALE API we need. We can't include all of is because that would conflict with HIP. */
 
-namespace redscale
-{
-
-class Stream;
-
-} // namespace redscale
-
-typedef redscale::Stream CUstream_st;
-typedef CUstream_st *cudaStream_t;
+struct CUstream_st;
+typedef struct CUstream_st *cudaStream_t;
 
 enum cudaMemcpyKind
 {
@@ -62,6 +55,7 @@ int cudaPointerGetAttributes(cudaPointerAttributes *, const void *);
 namespace redscale
 {
 
+bool isLibraryShutdownInProgress();
 std::shared_ptr<void> getUserPointerFromStream(const void *, cudaStream_t, bool);
 void addUserPointerToStream(const void *, std::shared_ptr<void>, cudaStream_t);
 
