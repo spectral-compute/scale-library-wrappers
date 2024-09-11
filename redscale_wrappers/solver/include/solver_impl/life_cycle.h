@@ -47,6 +47,7 @@ typedef cusolverDnHandle* cusolverDnHandle_t;
 GPUSOLVER_EXPORT_C cusolverStatus_t
 cusolverDnCreate(cusolverDnHandle_t *handle)
 INLINE_BODY_STATUS(
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     rocblas_handle roc_handle;
     MAYBE_ERROR(rocblas_create_handle(&roc_handle));
     *handle = new __redscaleDnHandle(roc_handle);
@@ -56,6 +57,7 @@ INLINE_BODY_STATUS(
 GPUSOLVER_EXPORT_C cusolverStatus_t
 cusolverDnDestroy(cusolverDnHandle_t handle)
 INLINE_BODY_STATUS(
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     MAYBE_ERROR(rocblas_destroy_handle(handle->handle))
     delete handle;
     return rocblas_status_success;
@@ -65,6 +67,7 @@ GPUSOLVER_EXPORT_C cusolverStatus_t
 cusolverDnSetStream(cusolverDnHandle_t handle, cudaStream_t streamId)
 INLINE_BODY_STATUS(
     handle->stream = CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(streamId);
+    CudaRocmWrapper::SetHipDevice setHipDevice(handle->stream->getHipDevice());
     return rocblas_set_stream(handle->handle, *handle->stream);
 )
 

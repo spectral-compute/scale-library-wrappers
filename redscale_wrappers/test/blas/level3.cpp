@@ -77,6 +77,32 @@ void testGemm(cudaStream_t stream, bool deviceScalars)
     EXPECT_EQ(cudaFree(deviceMem), cudaSuccess);
 }
 
+void testGemmMultigpu(bool explicittStream, bool deviceScalars)
+{
+    int originalDevice = 0;
+    EXPECT_EQ(cudaGetDevice(&originalDevice), cudaSuccess);
+
+    int numDevices = 0;
+    EXPECT_EQ(cudaGetDeviceCount(&numDevices), cudaSuccess);
+
+    for (int i = 0; i < numDevices; i++) {
+        EXPECT_EQ(cudaSetDevice(i), cudaSuccess);
+
+        cudaStream_t stream = nullptr;
+        if (explicittStream) {
+            EXPECT_EQ(cudaStreamCreate(&stream), cudaSuccess);
+        }
+
+        testGemm(stream, deviceScalars);
+
+        if (explicittStream) {
+            EXPECT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+        }
+    }
+
+    EXPECT_EQ(cudaSetDevice(originalDevice), cudaSuccess);
+}
+
 TEST(gemm, default_stream_host_scalars)
 {
     testGemm(nullptr, false);
@@ -101,6 +127,26 @@ TEST(gemm, explicit_stream_device_scalars)
     EXPECT_EQ(cudaStreamCreate(&stream), cudaSuccess);
     testGemm(stream, true);
     EXPECT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+}
+
+TEST(gemm, multigpu_default_stream_host_scalars)
+{
+    testGemmMultigpu(false, false);
+}
+
+TEST(gemm, multigpu_default_stream_device_scalars)
+{
+    testGemmMultigpu(false, true);
+}
+
+TEST(gemm, multigpu_explicit_stream_host_scalars)
+{
+    testGemmMultigpu(true, false);
+}
+
+TEST(gemm, multigpu_explicit_stream_device_scalars)
+{
+    testGemmMultigpu(true, true);
 }
 
 } // namespace

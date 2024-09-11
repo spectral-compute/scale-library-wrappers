@@ -82,21 +82,30 @@ __device__ inline uint4 unSillyify(silly_uint4 x) {
 
 #pragma clang diagnostic pop
 
+// Integer types
 #define make_uint4 silly_make_uint4
 #define ulonglong4 silly_ulonglong4
 #define ulonglong2 silly_ulonglong2
 #define uint4 silly_uint4
 #define uint2 silly_uint2
-#define hipMemcpy cudaMemcpy
+
+// enum ...Error_t
+#define hipError_t cudaError_t
 #define hipSuccess cudaSuccess
+
+// enum ...MemcpyKind
+#define hipMemcpyDefault cudaMemcpyDefault
 #define hipMemcpyHostToDevice cudaMemcpyHostToDevice
+
+// Functions
+#define hipMemcpy cudaMemcpy
 #define hipGetLastError cudaGetLastError
 
 // Rocrand includes support for 16bit floating point random,
-// while curand specifically does not, 
+// while curand specifically does not,
 // so we just butcher the fp16 support to achieve parity.
-// We do this by using the boolean type, to avoid unexpected conversions 
-// from a numeric type to float. 
+// We do this by using the boolean type, to avoid unexpected conversions
+// from a numeric type to float.
 #define __half bool
 struct __silly_half2 { bool a1; bool a2;};
 #define __half2 __silly_half2

@@ -36,6 +36,32 @@ void testAsum(cudaStream_t stream, bool deviceScalars)
     EXPECT_EQ(cudaFree(deviceMem), cudaSuccess);
 }
 
+void testAsumMultigpu(bool explicittStream, bool deviceScalars)
+{
+    int originalDevice = 0;
+    EXPECT_EQ(cudaGetDevice(&originalDevice), cudaSuccess);
+
+    int numDevices = 0;
+    EXPECT_EQ(cudaGetDeviceCount(&numDevices), cudaSuccess);
+
+    for (int i = 0; i < numDevices; i++) {
+        EXPECT_EQ(cudaSetDevice(i), cudaSuccess);
+
+        cudaStream_t stream = nullptr;
+        if (explicittStream) {
+            EXPECT_EQ(cudaStreamCreate(&stream), cudaSuccess);
+        }
+
+        testAsum(stream, deviceScalars);
+
+        if (explicittStream) {
+            EXPECT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+        }
+    }
+
+    EXPECT_EQ(cudaSetDevice(originalDevice), cudaSuccess);
+}
+
 TEST(asum, default_stream_host_scalars)
 {
     testAsum(nullptr, false);
@@ -60,6 +86,26 @@ TEST(asum, explicit_stream_device_scalars)
     EXPECT_EQ(cudaStreamCreate(&stream), cudaSuccess);
     testAsum(stream, true);
     EXPECT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+}
+
+TEST(asum, multigpu_default_stream_host_scalars)
+{
+    testAsumMultigpu(false, false);
+}
+
+TEST(asum, multigpu_default_stream_device_scalars)
+{
+    testAsumMultigpu(false, true);
+}
+
+TEST(asum, multigpu_explicit_stream_host_scalars)
+{
+    testAsumMultigpu(true, false);
+}
+
+TEST(asum, multigpu_explicit_stream_device_scalars)
+{
+    testAsumMultigpu(true, true);
 }
 
 } // namespace

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 include(../xcmake/scripts/Init.cmake)
 project(redscale_mathswrappers LANGUAGES C CXX
-        VERSION 1.0.2.0)
+        VERSION 1.1.0)
 include(XCMake)
 target_compile_options(ASSERTIONS_EFFECTS INTERFACE -UNDEBUG)
 
@@ -25,7 +25,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 if (NOT TARGET redscale)
     # Check that we got the RedSCALE compiler.
     if (NOT "${CMAKE_CXX_COMPILER}" MATCHES "/targets/gfx[^/]+/bin/clang\\+\\+")
-        fatal_error("CMAKE_CXX_COMPILER does not point to RedSCALE's Clang. Did you forget to set CMAKE_CXX_COMPILER?")
+        fatal_error("CMAKE_CXX_COMPILER does not point to SCALE's clang++ binary. Did you forget to set CMAKE_CXX_COMPILER?")
     endif()
 
     # Add the corresponding RedSCALE directory to the CMake prefix path.

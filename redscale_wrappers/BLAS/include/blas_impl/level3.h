@@ -210,7 +210,7 @@ BLAS_API(Z, z, syrk, Syrk,
     const cuDoubleComplex *beta,
     cuDoubleComplex *C, int ldc
 )
-#undef sryk_ARGS
+#undef syrk_ARGS
 
 /**
  * syr2k()
@@ -252,7 +252,7 @@ BLAS_API(Z, z, syr2k, Syr2k,
     const cuDoubleComplex *beta,
     cuDoubleComplex *C, int ldc
 )
-#undef sry2k_ARGS
+#undef syr2k_ARGS
 
 #if 0
 /**
@@ -733,4 +733,3 @@ DIRECT_BLAS_API_N(DotcEx, dotc_ex,
 #undef DotEx_ARGS
 #undef DotcEx_ARGS
 #endif
-

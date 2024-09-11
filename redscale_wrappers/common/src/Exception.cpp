@@ -1,6 +1,7 @@
 #include "cosplay_impl/Exception.hpp"
 
 #include <hip/hip_runtime_api.h>
+#include <string>
 
 using namespace std::string_literals;
 

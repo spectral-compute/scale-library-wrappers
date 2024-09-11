@@ -13,6 +13,7 @@ namespace redscale
 {
 
 cudaStream_t desugarStream(cudaStream_t stream);
+bool isLegacyDefault(cudaStream_t stream);
 int getStreamDevice(cudaStream_t stream);
 void addShutdownFunction(std::function<void ()>);
 
@@ -28,6 +29,20 @@ void getDevicePciId(int deviceId, int &domain, int &bus, int &device);
 
 namespace
 {
+
+/**
+ * Wraps cudaGetDevice with an error code check.
+ *
+ * @return The current CUDA device.
+ */
+int getCurrentCudaDevice()
+{
+    int result = 0;
+    if (cudaGetDevice(&result) != 0) {
+        throw CudaRocmWrapper::Exception("Could not get current CUDA device.");
+    }
+    return result;
+}
 
 /**
  * Get the HIP device corresponding to a given CUDA device.
@@ -129,25 +144,34 @@ CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(cudaStream_t cudaStream
 
 CudaRocmWrapper::HIPSynchronisedStream::~HIPSynchronisedStream()
 {
-    getStreamMap().remove(hipStream);
+    if (hipStream) {
+        getStreamMap().remove(hipStream);
+    }
+
+    int currentHipDevice = -1;
+    CudaRocmWrapper::HipException::test(hipGetDevice(&currentHipDevice), "Could not get current HIP device.");
+
+    // An RAII object to restore it after we're done.
+    auto restoreHipDevice = std::shared_ptr<void>(nullptr, [=](void *) {
+        HipException::test(hipSetDevice(currentHipDevice), "Could not restore HIP device.");
+    });
+
+    HipException::test(hipSetDevice(hipDevice), "Could not set HIP device.");
 
     /* Destroy the stream. */
     [[maybe_unused]] hipError_t e = hipStreamSynchronize(hipStream);
-    e = hipStreamDestroy(hipStream);
+    if (hipStream) {
+        e = hipStreamDestroy(hipStream);
+    }
 }
 
 CudaRocmWrapper::HIPSynchronisedStream::HIPSynchronisedStream(cudaStream_t cudaStream) :
     cudaStream(desugarStream(cudaStream))
 {
-    /* Make sure we restore the HIP device selection to match the CUDA device selection when we're done. */
-    // Get the current CUDA device.
-    int currentCudaDevice = 0;
-    if (cudaGetDevice(&currentCudaDevice) != 0) {
-        throw Exception("Could not get current CUDA device.");
-    }
-
-    // Get the corresponding HIP device.
-    int currentHipDevice = getHipDeviceForCudaDevice(currentCudaDevice);
+    /* Make sure we restore the HIP device selection to match the original value when we're done. */
+    // Get the HIP device.
+    int currentHipDevice = -1;
+    CudaRocmWrapper::HipException::test(hipGetDevice(&currentHipDevice), "Could not get current HIP device.");
 
     // An RAII object to restore it after we're done.
     auto restoreHipDevice = std::shared_ptr<void>(nullptr, [=](void *) {
@@ -155,15 +179,17 @@ CudaRocmWrapper::HIPSynchronisedStream::HIPSynchronisedStream(cudaStream_t cudaS
     });
 
     /* Set the HIP device to the one we want to create the stream on. */
-    HipException::test(hipSetDevice(getHipDeviceForCudaDevice(redscale::getStreamDevice(this->cudaStream))),
-                       "Could not set HIP device.");
+    hipDevice = getHipDeviceForCudaDevice(redscale::getStreamDevice(this->cudaStream));
+    HipException::test(hipSetDevice(hipDevice), "Could not set HIP device.");
 
     /* Add a new stream to the map. */
-    HipException::test(hipStreamCreate(&hipStream), "Could not create HIP stream.");
-    getStreamMap().add(this->cudaStream, hipStream);
+    if (!isLegacyDefault(this->cudaStream)) {
+        HipException::test(hipStreamCreate(&hipStream), "Could not create HIP stream.");
+        getStreamMap().add(this->cudaStream, hipStream);
+    }
 }
 
-hsa_signal_value_t *CudaRocmWrapper::HIPSynchronisedStream::enqueueStartOfHipItems()
+CudaRocmWrapper::HIPSynchronisedStream::EnqueueState CudaRocmWrapper::HIPSynchronisedStream::enqueueStartOfHipItems()
 {
     /* Get and prepare the signals. */
     auto [startSignal, endSignal] = signals.getSignalGroup<2>(-1);
@@ -172,24 +198,50 @@ hsa_signal_value_t *CudaRocmWrapper::HIPSynchronisedStream::enqueueStartOfHipIte
     redscale::Hsa::enqueueStreamMemoryFence(cudaStream, HSA_FENCE_SCOPE_AGENT, {0}, getSignalFromValuePtr(startSignal));
     redscale::Hsa::notifyStream(cudaStream);
 
+    /* Get the HIP device. */
+    int currentHipDevice = -1;
+    CudaRocmWrapper::HipException::test(hipGetDevice(&currentHipDevice), "Could not get current HIP device.");
+
+    /* Switch to the HIP device for this stream. */
+    HipException::test(hipSetDevice(hipDevice), "Could not set HIP device.");
+
     /* Make the HIP stream wait for the CUDA stream. */
     HipException::test(hipStreamWaitValue32(hipStream, startSignal, 0, hipStreamWaitValueEq),
                        "Could not enqueue signal wait onto HIP stream.");
 
     /* Give the end signal to the caller to give back to enqueueEndOfHipItems. */
-    return endSignal;
+    return { endSignal, currentHipDevice };
 }
 
-void CudaRocmWrapper::HIPSynchronisedStream::enqueueEndOfHipItems(hsa_signal_value_t *signal)
+void CudaRocmWrapper::HIPSynchronisedStream::enqueueEndOfHipItems(EnqueueState state)
 {
     /* Make the HIP stream write zero to the signl to make the CUDA stream proceed. */
-    HipException::test(hipStreamWriteValue32(hipStream, signal, 0, 0),
+    HipException::test(hipStreamWriteValue32(hipStream, state.signal, 0, 0),
                        "Could not enqueue signal write onto HIP stream.");
 
     /* Make the CUDA stream wait for the write we just added. */
     // Use as completion signal too lets us use this signal to wait for -1 in the recycling thread. HIP completion sets
     // the end signal to 0, which unblocks the CUDA stream, which decrements the end signal, thus giving -1.
-    redscale::Hsa::enqueueStreamMemoryFence(cudaStream, HSA_FENCE_SCOPE_AGENT, getSignalFromValuePtr(signal),
-                                           getSignalFromValuePtr(signal));
+    redscale::Hsa::enqueueStreamMemoryFence(cudaStream, HSA_FENCE_SCOPE_AGENT, getSignalFromValuePtr(state.signal),
+                                           getSignalFromValuePtr(state.signal));
     redscale::Hsa::notifyStream(cudaStream);
+
+    /* Restore the original HIP device. */
+    HipException::test(hipSetDevice(state.originalHipDevice), "Could not set HIP device.");
+}
+
+CudaRocmWrapper::SetHipDevice::~SetHipDevice()
+{
+    HipException::test(hipSetDevice(originalHipDevice), "Could not set HIP device.");
+}
+
+CudaRocmWrapper::SetHipDevice::SetHipDevice(int device)
+{
+    CudaRocmWrapper::HipException::test(hipGetDevice(&originalHipDevice), "Could not get current HIP device.");
+    HipException::test(hipSetDevice(getHipDeviceForCudaDevice(device)), "Could not set HIP device.");
+}
+
+CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice::SetHipDeviceToCurrentCudaDevice() :
+    setHipDevice(getHipDeviceForCudaDevice(getCurrentCudaDevice()))
+{
 }

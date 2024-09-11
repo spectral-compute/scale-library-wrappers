@@ -6,6 +6,12 @@
 #include <driver_types.h>
 #include <library_types.h>
 
+#define CUBLAS_VER_MAJOR 12
+#define CUBLAS_VER_MINOR 5
+#define CUBLAS_VER_PATCH 2
+#define CUBLAS_VER_BUILD 999
+#define CUBLAS_VERSION ((CUBLAS_VER_MAJOR * 10000) + (CUBLAS_VER_MINOR * 100) + CUBLAS_VER_PATCH)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

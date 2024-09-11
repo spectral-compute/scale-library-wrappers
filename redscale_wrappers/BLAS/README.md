@@ -13,9 +13,9 @@ For BLAS API functions that take a letter representing type, there is the `BLAS_
 ```c++
 #define BLAS_API(CULETTER, ROCLETTER, NAME, CXXNAME, ...) \
     extern "C" GPUBLAS_EXPORT cublasStatus_t \
-    BLAS_C_FN_NAME(cublas, CULETTER, NAME)(cublasHandle_t handle, __VA_ARGS__) { \
+    BLAS_C_FN_NAME(CULETTER, NAME)(cublasHandle_t handle, __VA_ARGS__) { \
             CudaRocmWrapper::HIPSynchronisedStream::EnqueueHipItems q{*handle->stream}; \
-            return mapReturnCode(BLAS_C_FN_NAME(rocblas, _ ## ROCLETTER, NAME) \
+            return mapReturnCode(ROC_C_FN_NAME(ROCLETTER, NAME) \
                                  (MAP(CU_TO_ROC, COMMA, handle->handle, NAME ## _ARGS))); \
     }
 ```

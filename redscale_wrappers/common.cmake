@@ -49,6 +49,7 @@ function(add_cosplay_lib)
         get_cpp_dependencies(RESULT SOLVER_DEPS
             TARGETS ${d_NAME} roc::${d_AMD_NAME} redscale cosplaycommon
             INCLUDE_PATHS ${PROJECT_SOURCE_DIR}/build_tools/depinc
+            DEFINES -D__HIP_PLATFORM_AMD__=1
             SOURCES ${d_DEPSCAN_HEADERS}
             RELATIVE "${IINC}"
         )

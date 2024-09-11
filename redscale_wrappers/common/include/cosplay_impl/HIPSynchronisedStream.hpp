@@ -25,6 +25,17 @@ class HIPSynchronisedStream final
 {
 public:
     /**
+     * State object to pass between enqueueStartOfHipItems and enqueueEndOfHipItems.
+     *
+     * This isn't stored in the class because that would not be thread-local.
+     */
+    struct EnqueueState final
+    {
+        hsa_signal_value_t *signal = nullptr;
+        int originalHipDevice = -1;
+    };
+
+    /**
      * An RAII object that makes things added to the HIP stream while it exists appear as a single item on the CUDA
      * stream.
      *
@@ -36,16 +47,17 @@ public:
     public:
         ~EnqueueHipItems()
         {
-            streams.enqueueEndOfHipItems(signal);
+            streams.enqueueEndOfHipItems(state);
         }
 
-        EnqueueHipItems(HIPSynchronisedStream &streams) : streams(streams), signal(streams.enqueueStartOfHipItems())
+        explicit EnqueueHipItems(HIPSynchronisedStream &streams) :
+            streams(streams), state(streams.enqueueStartOfHipItems())
         {
         }
 
     private:
         HIPSynchronisedStream &streams;
-        hsa_signal_value_t *signal;
+        EnqueueState state;
     };
 
     /**
@@ -81,18 +93,26 @@ public:
     }
 
     /**
+     * Get the HIP device for this stream.
+     */
+    int getHipDevice() const
+    {
+        return hipDevice;
+    }
+
+    /**
      * Enqueue the start of a sequence of HIP items as a single CUDA item.
      *
-     * @return A signal to give to enqueueEndOfHipItems.
+     * @return The state to give to enqueueEndOfHipItems.
      */
-    hsa_signal_value_t *enqueueStartOfHipItems();
+    EnqueueState enqueueStartOfHipItems();
 
     /**
      * Enqueue the end of a sequence of HIP items started with enqueueStartOfHipItems.
      *
-     * @param signal The signal returned by enqueueStartOfHipItems.
+     * @param state The value returned by enqueueStartOfHipItems.
      */
-    void enqueueEndOfHipItems(hsa_signal_value_t *signal);
+    void enqueueEndOfHipItems(EnqueueState state);
 
     /**
      * Create a HIP stream and manage it as synchronized to the given CUDA stream.
@@ -103,12 +123,38 @@ public:
      *
      * @param cudaStream The CUDA stream to synchronize with. By, the default stream is used.
      */
-    HIPSynchronisedStream(cudaStream_t cudaStream);
+    explicit HIPSynchronisedStream(cudaStream_t cudaStream);
 
 private:
     SignalPool signals;
-    cudaStream_t cudaStream;
-    hipStream_t hipStream;
+    cudaStream_t cudaStream = nullptr;
+    hipStream_t hipStream = nullptr;
+    int hipDevice = -1;
+};
+
+/**
+ * A RAII object to set the HIP device for this stream and restore it afterwards.
+ */
+class SetHipDevice final
+{
+public:
+    ~SetHipDevice();
+    explicit SetHipDevice(int device);
+
+private:
+    int originalHipDevice = -1;
+};
+
+/**
+ * A RAII object to set the current HIP device to match the current CUDA device and restore it afterwards.
+ */
+class SetHipDeviceToCurrentCudaDevice final
+{
+public:
+    SetHipDeviceToCurrentCudaDevice();
+
+private:
+    SetHipDevice setHipDevice;
 };
 
 } // CudaRocmWrapper

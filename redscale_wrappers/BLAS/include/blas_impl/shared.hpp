@@ -14,8 +14,14 @@
 #ifndef NO_BLAS_COMPILE
 
 /* Handy macros for declaring BLAS functions, and their handy C++ polymorphic overload wrappers. */
-#define _BLAS_C_FN_NAME(LIBNAME, LETTER, NAME) LIBNAME ## LETTER ## NAME
-#define BLAS_C_FN_NAME(LIBNAME, LETTER, NAME) _BLAS_C_FN_NAME(LIBNAME, LETTER, NAME)
+#define _BLAS_C_FN_NAME(LETTER, NAME) cublas ## LETTER ## NAME ## _v2
+#define BLAS_C_FN_NAME(LETTER, NAME) _BLAS_C_FN_NAME(LETTER, NAME)
+
+#define _ROC_C_FN_NAME(LETTER, NAME) rocblas ## _ ## LETTER ## NAME
+#define ROC_C_FN_NAME(LETTER, NAME) _ROC_C_FN_NAME(LETTER, NAME)
+
+#define _LEGACY_BLAS_C_FN_NAME(LIBNAME, LETTER, NAME) LIBNAME ## LETTER ## NAME
+#define LEGACY_BLAS_C_FN_NAME(LIBNAME, LETTER, NAME) _LEGACY_BLAS_C_FN_NAME(LIBNAME, LETTER, NAME)
 
 /* A BLAS API function that doesn't take a "letter" representing type. */
 #define DIRECT_BLAS_API_N(NAME, ROCNAME, ...) \
@@ -30,21 +36,14 @@
 
 #define BLAS_API(CULETTER, ROCLETTER, NAME, CXXNAME, ...) \
     extern "C" GPUBLAS_EXPORT cublasStatus_t \
-    BLAS_C_FN_NAME(cublas, CULETTER, NAME)(cublasHandle_t handle, __VA_ARGS__) { \
+    BLAS_C_FN_NAME(CULETTER, NAME)(cublasHandle_t handle, __VA_ARGS__) { \
             CudaRocmWrapper::HIPSynchronisedStream::EnqueueHipItems q{*handle->stream}; \
-            return mapReturnCode(BLAS_C_FN_NAME(rocblas, _ ## ROCLETTER, NAME) \
+            return mapReturnCode(ROC_C_FN_NAME(ROCLETTER, NAME) \
                                  (MAP(CU_TO_ROC, COMMA, handle->handle, NAME ## _ARGS))); \
     }
 
-#endif
 
-/**
- * Thrown to make the C API return a given status code.
- */
-struct CuBlasStatus
-{
-    cublasStatus_t status;
-};
+#endif
 
 namespace {
 

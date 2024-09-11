@@ -13,9 +13,7 @@ TEST(BLAS, Version) {
     EXPECT_EQ(cublasCreate(&handle), CUBLAS_STATUS_SUCCESS);
     EXPECT_EQ(cublasGetVersion(handle, &version), CUBLAS_STATUS_SUCCESS);
 
-#ifdef __REDSCALE__
-    EXPECT_EQ(version, 42);
-#endif // __REDSCALE__
+    EXPECT_EQ(version, CUBLAS_VERSION);
 }
 
 TEST(BLAS, LibraryPropertyNonsense) {
@@ -28,9 +26,7 @@ TEST(BLAS, LibraryPropertyNonsense) {
     EXPECT_EQ(cublasGetProperty(MINOR_VERSION, &minor), CUBLAS_STATUS_SUCCESS);
     EXPECT_EQ(cublasGetProperty(PATCH_LEVEL, &patch), CUBLAS_STATUS_SUCCESS);
 
-#ifdef __REDSCALE__
-    EXPECT_EQ(major, 42);
-    EXPECT_EQ(minor, 0);
-    EXPECT_EQ(patch, 0);
-#endif // __REDSCALE__
+    EXPECT_EQ(major, CUBLAS_VER_MAJOR);
+    EXPECT_EQ(minor, CUBLAS_VER_MINOR);
+    EXPECT_EQ(patch, CUBLAS_VER_PATCH);
 }

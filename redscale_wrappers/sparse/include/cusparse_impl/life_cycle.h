@@ -33,6 +33,7 @@ struct CuToRoc<cusparseHandle_t> final
 GPUSPARSE_EXPORT_C cusparseStatus_t
 cusparseCreate(cusparseHandle_t* handle)
     INLINE_BODY_STATUS(
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     rocsparse_handle h;
     MAYBE_ERROR(rocsparse_create_handle(&h));
 
@@ -44,6 +45,7 @@ cusparseCreate(cusparseHandle_t* handle)
 GPUSPARSE_EXPORT_C cusparseStatus_t
 cusparseDestroy(cusparseHandle_t handle)
     INLINE_BODY_STATUS(
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return rocsparse_destroy_handle(handle->handle);
 )
 
@@ -65,6 +67,7 @@ GPUSPARSE_EXPORT_C cusparseStatus_t
 cusparseSetStream(cusparseHandle_t handle, cudaStream_t streamId)
 INLINE_BODY_STATUS(
     handle->stream = CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(streamId);
+    CudaRocmWrapper::SetHipDevice setHipDevice(handle->stream->getHipDevice());
     return rocsparse_status_success;
 )
 

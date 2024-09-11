@@ -1,34 +1,35 @@
-#include "blas_auxiliary.h"
+#include "blas_impl/blas_auxiliary.h"
 #include "blas_impl/shared.hpp"
 
 cublasStatus_t cublasCreate(cublasHandle_t *handle) {
     *handle = new cublasHandle;
-
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return mapReturnCode(rocblas_create_handle(&(*handle)->handle));
 }
 
 cublasStatus_t cublasDestroy(cublasHandle_t handle) {
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     cublasStatus_t out = mapReturnCode(rocblas_destroy_handle(handle->handle));
     delete handle;
     return out;
 }
 
 
-cublasStatus_t cublasGetVersion(cublasHandle_t, int* version) {
-    *version = 42;
+cublasStatus_t cublasGetVersion_v2(cublasHandle_t, int* version) {
+    *version = CUBLAS_VERSION;
     return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cublasGetProperty(libraryPropertyType type, int* value) {
     switch (type) {
         case MAJOR_VERSION:
-            *value = 42;
+            *value = CUBLAS_VER_MAJOR;
             break;
         case MINOR_VERSION:
-            *value = 0;
+            *value = CUBLAS_VER_MINOR;
             break;
         case PATCH_LEVEL:
-            *value = 0;
+            *value = CUBLAS_VER_PATCH;
             break;
     }
 
@@ -37,6 +38,7 @@ cublasStatus_t cublasGetProperty(libraryPropertyType type, int* value) {
 
 cublasStatus_t cublasSetStream(cublasHandle_t handle, cudaStream_t s) {
     handle->stream = CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(s);
+    CudaRocmWrapper::SetHipDevice setHipDevice(handle->stream->getHipDevice());
     return mapReturnCode(rocblas_set_stream(*handle, *handle->stream));
 }
 

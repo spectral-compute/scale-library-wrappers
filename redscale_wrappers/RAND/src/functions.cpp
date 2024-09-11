@@ -33,6 +33,7 @@ struct curandGenerator {
 
 curandStatus_t curandCreateGenerator(curandGenerator_t* gen, curandRngType_t type) {
     *gen = new curandGenerator;
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return mapReturnCode(rocrand_create_generator((&((*gen)->generator)), cuToRoc(type)));
 }
 curandStatus_t curandCreateGeneratorHost(curandGenerator_t* gen, curandRngType_t type) {
@@ -40,18 +41,22 @@ curandStatus_t curandCreateGeneratorHost(curandGenerator_t* gen, curandRngType_t
     return curandCreateGenerator(gen, type);
 }
 curandStatus_t curandCreatePoissonDistribution(double lambda, curandDiscreteDistribution_t* distrib) {
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return mapReturnCode(rocrand_create_poisson_distribution(lambda, distrib));
 }
 
 curandStatus_t curandDestroyDistribution(curandDiscreteDistribution_t distrib) {
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return mapReturnCode(rocrand_destroy_discrete_distribution(distrib));
 }
 curandStatus_t curandDestroyGenerator(curandGenerator_t gen) {
+    CudaRocmWrapper::SetHipDeviceToCurrentCudaDevice raii;
     return mapReturnCode(rocrand_destroy_generator(*gen));
 }
 
 curandStatus_t curandSetStream(curandGenerator_t gen, cudaStream_t str) {
     gen->str = CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(str);
+    CudaRocmWrapper::SetHipDevice setHipDevice(gen->str->getHipDevice());
     return mapReturnCode(rocrand_set_stream(*gen, *gen->str));
 }
 

@@ -3,8 +3,22 @@
 #include "cosplay_impl/cuda_decl.hpp"
 #include <hip/hip_runtime_api.h>
 #include <dlfcn.h>
+#include <atomic>
 #include <cassert>
 #include <vector>
+
+namespace
+{
+
+/* A state machine to make sure we don't call hipFree after the HIP library has deinitialized. */
+std::atomic_flag registered;
+std::atomic_flag deinit;
+void onDeinit()
+{
+    deinit.test_and_set();
+}
+
+} // namespace
 
 CudaRocmWrapper::SignalPool::~SignalPool()
 {
@@ -20,7 +34,7 @@ CudaRocmWrapper::SignalPool::~SignalPool()
     // If we're in global de-init, don't bother hipFree-ing anything.
     // HIP might have already been de-initialised (in which case this
     // would crash),
-    if (!redscale::isLibraryShutdownInProgress()) {
+    if (!deinit.test() && !redscale::isLibraryShutdownInProgress()) {
         /* Destroy the signal. */
         static auto hipFree = (hipError_t (*)(void *)) dlsym(RTLD_NEXT, "hipFree");
         for (hsa_signal_value_t *signal: signalPool) {
@@ -31,6 +45,16 @@ CudaRocmWrapper::SignalPool::~SignalPool()
 
 CudaRocmWrapper::SignalPool::SignalPool() : signalRecyclingThread([this]() { recycleSignals(); })
 {
+    /* Register the deinitialization function above. */
+    if (!registered.test_and_set()) {
+        // Make sure HIP is initialized first.
+        [[maybe_unused]] hipError_t e = hipInit(0);
+
+        // Make sure we set deinit to true before HIP's static deinitialization. Note that static destruction and atexit
+        // functions run in the opposite order to their registration.
+        // https://en.cppreference.com/w/cpp/utility/program/exit
+        std::atexit(onDeinit);
+    }
 }
 
 void CudaRocmWrapper::SignalPool::getSignalGroup(hsa_signal_value_t **dst, size_t n, int waitFor)

@@ -15,7 +15,7 @@
 #endif /* __cplusplus */
 
 /* Handy macros for declaring BLAS functions, and their handy C++ polymorphic overload wrappers. */
-#define _BLAS_C_FN_NAME(LETTER, NAME) cublas ## LETTER ## NAME
+#define _BLAS_C_FN_NAME(LETTER, NAME) cublas ## LETTER ## NAME ## _v2
 #define BLAS_C_FN_NAME(LETTER, NAME) _BLAS_C_FN_NAME(LETTER, NAME)
 
 #define BLAS_C_API(LETTER, NAME, ...) \
@@ -70,5 +70,6 @@
 #undef _BLAS_C_FN_NAME
 #undef CXX_BLAS_WRAPPER
 #undef EXTERN_C
+#undef DIRECT_BLAS_API_N
 
 #endif /* GPUBLAS_APIS_H */
