@@ -55,15 +55,6 @@ private:
     bool terminate = false;
 
     /**
-     * A pool of signals.
-     *
-     * This grows to the size needed by the application. Each element is the value returned by HIP, which is a pointer
-     * to the signal's atomic value. The actual HSA signal is a pointer to a struct containing this. See
-     * getSignalFromValuePtr.
-     */
-    std::deque<hsa_signal_value_t *> signalPool; // The signal value pointers for the signals.
-
-    /**
      * The set of signals that are in use.
      *
      * Each element is a pair: signal, and value to wait for. If the signal is nullptr, then all the prior signals are

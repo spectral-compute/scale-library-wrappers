@@ -1,22 +1,78 @@
-#include "cosplay_impl/SignalPool.hpp"
-#include "cosplay_impl/Exception.hpp"
 #include "cosplay_impl/cuda_decl.hpp"
+#include "cosplay_impl/Deinit.hpp"
+#include "cosplay_impl/Exception.hpp"
+#include "cosplay_impl/SignalPool.hpp"
 #include <hip/hip_runtime_api.h>
 #include <dlfcn.h>
 #include <atomic>
 #include <cassert>
 #include <vector>
 
+using namespace CudaRocmWrapper;
+
 namespace
 {
 
-/* A state machine to make sure we don't call hipFree after the HIP library has deinitialized. */
-std::atomic_flag registered;
-std::atomic_flag deinit;
-void onDeinit()
+/**
+ * A HIP signal allocator.
+ *
+ * This means we don't have to call hipExtMallocWithFlags every time we need a signal, and means we can avoid a signal
+ * leak and destruction-time issues (e.g: a bug where calling hipFree deadlocked iwth hipStreamWriteValue64).
+ *
+ * Using a single source of signals like this works because the signals are actually on the host.
+ */
+class HipSignalPool final
 {
-    deinit.test_and_set();
-}
+public:
+    static HipSignalPool &getPool()
+    {
+        static HipSignalPool pool;
+        return pool;
+    }
+
+    // No need for a destructor, since it would only run at destructor time, when we don't know that HIP hasn't adlready
+    // been destroyed.
+
+    hsa_signal_value_t *allocate()
+    {
+        /* Try and return an already allocated signal. */
+        {
+            std::lock_guard lock(mutex);
+            if (!signals.empty()) {
+                hsa_signal_value_t *result = signals.back();
+                signals.pop_back();
+                return result;
+            }
+        }
+
+        /* Create new signals if necessary. */
+        // The API for doing this is not well documented, and also seems to work backwards. Internally it calls
+        // hsa_amd_signal_create, and then the value HIP's malloc returns is from hsa_amd_signal_value_pointer. The library
+        // then looks up that pointer to find the original signal.
+        hsa_signal_value_t *result = nullptr;
+        HipException::test(hipExtMallocWithFlags((void **)&result, 8, hipMallocSignalMemory),
+                           "Could not create HIP signal.");
+        return result;
+    }
+
+    void free(hsa_signal_value_t *signal)
+    {
+        std::lock_guard lock(mutex);
+        signals.push_back(signal); // Rarely actually allocates.
+    }
+
+private:
+    Spinlock mutex;
+
+    /**
+     * A pool of signals.
+     *
+     * This grows to the size needed by the application. Each element is the value returned by HIP, which is a pointer
+     * to the signal's atomic value. The actual HSA signal is a pointer to a struct containing this. See
+     * getSignalFromValuePtr.
+     */
+    std::vector<hsa_signal_value_t *> signals;
+};
 
 } // namespace
 
@@ -30,59 +86,22 @@ CudaRocmWrapper::SignalPool::~SignalPool()
     cv.notify_one();
     signalRecyclingThread.join();
     assert(activeSignals.empty());
-
-    // If we're in global de-init, don't bother hipFree-ing anything.
-    // HIP might have already been de-initialised (in which case this
-    // would crash),
-    if (!deinit.test() && !redscale::isLibraryShutdownInProgress()) {
-        /* Destroy the signal. */
-        static auto hipFree = (hipError_t (*)(void *)) dlsym(RTLD_NEXT, "hipFree");
-        for (hsa_signal_value_t *signal: signalPool) {
-            [[maybe_unused]] hipError_t e = hipFree(signal);
-        }
-    }
 }
 
 CudaRocmWrapper::SignalPool::SignalPool() : signalRecyclingThread([this]() { recycleSignals(); })
-{
-    /* Register the deinitialization function above. */
-    if (!registered.test_and_set()) {
-        // Make sure HIP is initialized first.
-        [[maybe_unused]] hipError_t e = hipInit(0);
-
-        // Make sure we set deinit to true before HIP's static deinitialization. Note that static destruction and atexit
-        // functions run in the opposite order to their registration.
-        // https://en.cppreference.com/w/cpp/utility/program/exit
-        std::atexit(onDeinit);
-    }
-}
+{}
 
 void CudaRocmWrapper::SignalPool::getSignalGroup(hsa_signal_value_t **dst, size_t n, int waitFor)
 {
-    size_t i = 0;
-
-    /* Try and get signals that we've already created. */
-    {
-        std::unique_lock lock(mutex);
-        for (; i < n && !signalPool.empty(); i++) {
-            dst[i] = signalPool.back();
-            signalPool.pop_back();
-        }
-    }
-
-    /* Create new signals if necessary. */
-    // The API for doing this is not well documented, and also seems to work backwards. Internally it calls
-    // hsa_amd_signal_create, and then the value HIP's malloc returns is from hsa_amd_signal_value_pointer. The library
-    // then looks up that pointer to find the original signal.
-    for (; i < n; i++) {
-        HipException::test(hipExtMallocWithFlags((void **)(dst + i), 8, hipMallocSignalMemory),
-                           "Could not create HIP signal.");
+    /* Get new signals. */
+    for (size_t i = 0; i < n; i++) {
+        dst[i] = HipSignalPool::getPool().allocate();
     }
 
     /* Add the signals to the active signal set. */
     {
         std::lock_guard lock(mutex);
-        for (i = 0; i < n; i++) {
+        for (size_t i = 0; i < n; i++) {
             __atomic_store_n(dst[i], 1, __ATOMIC_RELAXED);
             activeSignals.emplace_back(dst[i], 0);
         }
@@ -133,7 +152,7 @@ void CudaRocmWrapper::SignalPool::recycleSignals()
 
         /* Recycle the signals. */
         for (size_t i = 0; i < numSignalsInGroup; i++) {
-            signalPool.emplace_back(signalsInGroup[i]);
+            HipSignalPool::getPool().free(signalsInGroup[i]);
         }
         numSignalsInGroup = 0;
     }

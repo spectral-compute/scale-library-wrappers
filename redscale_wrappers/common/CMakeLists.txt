@@ -11,4 +11,4 @@ target_link_libraries(cosplaycommon PUBLIC hip::host hsa-runtime64::hsa-runtime6
 # We need to be able to cast from cuComplex * to rocblas_float_complex *.
 target_compile_options(cosplaycommon PUBLIC -fno-strict-aliasing)
 
-install(DIRECTORY include/ DESTINATION ./include/redscale/)
+install(DIRECTORY include/ DESTINATION include/redscale/)

@@ -41,6 +41,7 @@ extern "C"
 int cudaDeviceSynchronize();
 int cudaStreamSynchronize(cudaStream_t);
 int cudaFree(void *);
+int cuInit(int);
 int cudaFreeAsync(void *, cudaStream_t);
 int cudaMalloc(void **, size_t);
 int cudaMallocAsync(void **, size_t, cudaStream_t);
@@ -55,7 +56,6 @@ int cudaPointerGetAttributes(cudaPointerAttributes *, const void *);
 namespace redscale
 {
 
-bool isLibraryShutdownInProgress();
 std::shared_ptr<void> getUserPointerFromStream(const void *, cudaStream_t, bool);
 void addUserPointerToStream(const void *, std::shared_ptr<void>, cudaStream_t);
 

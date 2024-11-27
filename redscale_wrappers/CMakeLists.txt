@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 include(../xcmake/scripts/Init.cmake)
 project(redscale_mathswrappers LANGUAGES C CXX
-        VERSION 1.1.0)
+        VERSION 1.2.0)
 include(XCMake)
 target_compile_options(ASSERTIONS_EFFECTS INTERFACE -UNDEBUG)
 

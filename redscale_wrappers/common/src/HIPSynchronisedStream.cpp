@@ -1,5 +1,6 @@
 #include "cosplay_impl/HIPSynchronisedStream.hpp"
 #include "cosplay_impl/cuda_decl.hpp"
+#include "cosplay_impl/Deinit.hpp"
 #include "cosplay_impl/Exception.hpp"
 #include <hip/hip_runtime_api.h>
 #include <functional>
@@ -144,30 +145,36 @@ CudaRocmWrapper::HIPSynchronisedStream::getForCudaStream(cudaStream_t cudaStream
 
 CudaRocmWrapper::HIPSynchronisedStream::~HIPSynchronisedStream()
 {
+    if (deinitHasBegun()) {
+        // HIP is full of delicious shutdown-time segfaults, so don't bother trying
+        // to clean up any resources in HIP-land if static de-init has begun.
+        return;
+    }
+
     if (hipStream) {
         getStreamMap().remove(hipStream);
     }
 
-    int currentHipDevice = -1;
-    CudaRocmWrapper::HipException::test(hipGetDevice(&currentHipDevice), "Could not get current HIP device.");
+    auto checkError = [](hipError_t e, const char* word) {
+        if (e == hipErrorContextIsDestroyed) {
+            return;
+        }
 
-    // An RAII object to restore it after we're done.
-    auto restoreHipDevice = std::shared_ptr<void>(nullptr, [=](void *) {
-        HipException::test(hipSetDevice(currentHipDevice), "Could not restore HIP device.");
-    });
-
-    HipException::test(hipSetDevice(hipDevice), "Could not set HIP device.");
+        CudaRocmWrapper::HipException::test(e, word);
+    };
 
     /* Destroy the stream. */
-    [[maybe_unused]] hipError_t e = hipStreamSynchronize(hipStream);
+    checkError(hipStreamSynchronize(hipStream), "falied to sync HIP stream");
     if (hipStream) {
-        e = hipStreamDestroy(hipStream);
+        checkError(hipStreamDestroy(hipStream), "failed to destroy HIP stream");
     }
 }
 
 CudaRocmWrapper::HIPSynchronisedStream::HIPSynchronisedStream(cudaStream_t cudaStream) :
     cudaStream(desugarStream(cudaStream))
 {
+    registerDeinitHandler();
+
     /* Make sure we restore the HIP device selection to match the original value when we're done. */
     // Get the HIP device.
     int currentHipDevice = -1;

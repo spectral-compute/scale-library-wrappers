@@ -40,7 +40,7 @@ function(add_cosplay_lib)
 
 
     target_link_libraries(${d_NAME} PRIVATE cosplaycommon redscale)
-    install(DIRECTORY include/ DESTINATION ./include/redscale)
+    install(DIRECTORY include/ DESTINATION include/redscale)
 
     # Install dependency headers. We need to do this even if the shared libraries aren't installed because there's no
     # rpath equivalent for headers unless we rewrite our headers to include by absolute path.
@@ -56,7 +56,7 @@ function(add_cosplay_lib)
 
         foreach (_H IN LISTS SOLVER_DEPS)
             get_filename_component(DIR "${_H}" DIRECTORY)
-            install(FILES "${IINC}/${_H}" DESTINATION "./include/redscale/${DIR}")
+            install(FILES "${IINC}/${_H}" DESTINATION "include/redscale/${DIR}")
         endforeach ()
     endif()
 endfunction()

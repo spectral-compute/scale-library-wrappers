@@ -1,6 +1,8 @@
 #ifndef GPURAND_DEVICE_AUXILLARY_H
 #define GPURAND_DEVICE_AUXILLARY_H
 
+#include "curand.h"
+
 #include <redscale_impl/impl_defines.h>
 
 // The device stuff is _fun_. Rocrand defines it in its headers, and most of the function names are the
